@@ -1,3 +1,5 @@
+import streamlit as st
+
 if st.button("Test Connection"):
     try:
         server_time = test_connection()
