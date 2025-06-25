@@ -1,13 +1,9 @@
-import streamlit as st
-from database import test_connection
-
-st.set_page_config(page_title="Database Test", layout="centered")
-
-st.title("✅ Database Connection Test")
-
 if st.button("Test Connection"):
     try:
-        timestamp = test_connection()
-        st.success(f"Connection successful! Server time: {timestamp}")
+        server_time = test_connection()
+        if server_time:
+            st.success(f"🎉 Connected! Server time: {server_time}")
+        else:
+            st.warning("Connected, but server time is not available.")
     except Exception as e:
-        st.error(f"Connection failed: {e}")
+        st.error(f"❌ Connection failed: {e}")
