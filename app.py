@@ -1,21 +1,27 @@
 import streamlit as st
-from sqlalchemy import create_engine, text
+from database import test_connection, insert_transaction, get_transactions_by_user
 
-# Set page configuration
-st.set_page_config(page_title="Minimal Test App", layout="centered")
-st.title("🔌 Database Connection Test")
+st.title("💸 WiseBudget Tracker")
 
-# Construct connection string using secrets
-db_url = f"postgresql://{st.secrets['DB_USER']}:{st.secrets['DB_PASSWORD']}@" \
-         f"{st.secrets['DB_HOST']}:{st.secrets['DB_PORT']}/{st.secrets['DB_NAME']}"
+test_connection()
 
-# Create the engine
-engine = create_engine(db_url)
+st.subheader("Add Transaction")
+user_id = st.text_input("User ID (uuid)")
+name = st.text_input("Transaction Name")
+amount = st.number_input("Amount", min_value=0.0, step=0.01)
+category = st.selectbox("Category", ["Needs", "Wants", "Savings"])
 
-# Attempt to connect and fetch the server time
-try:
-    with engine.connect() as conn:
-        result = conn.execute(text("SELECT NOW()")).fetchone()
-        st.success(f"🎉 Connected! Server time: {result[0]}")
-except Exception as e:
-    st.error(f"❌ Connection failed: {e}")
+if st.button("Submit Transaction"):
+    if user_id and name and amount and category:
+        insert_transaction(user_id, name, amount, category)
+    else:
+        st.warning("Please fill out all fields.")
+
+st.subheader("View Transactions")
+if user_id:
+    transactions = get_transactions_by_user(user_id)
+    if transactions:
+        for row in transactions:
+            st.write(dict(row))
+    else:
+        st.info("No transactions found.")
