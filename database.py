@@ -29,14 +29,14 @@ def insert_transactions(df: pd.DataFrame):
     with engine.connect() as conn:
         for _, row in df.iterrows():
             conn.execute(
-                text("INSERT INTO transactions (user_email, amount, category, description, created_at) "
-                     "VALUES (:user_email, :amount, :category, :description, :created_at)"),
+                text("INSERT INTO transactions (user_email, amount, category, description, date) "
+                     "VALUES (:user_email, :amount, :category, :description, :date)"),
                 {
                     "user_email": row["user_email"],
                     "amount": row["amount"],
                     "category": row["category"],
                     "description": row["description"],
-                    "created_at": row["created_at"]
+                    "date": row["date"]
                 }
             )
 
