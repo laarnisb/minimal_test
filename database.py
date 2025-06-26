@@ -7,7 +7,8 @@ engine = create_engine(st.secrets["DATABASE_URL"])
 
 # Return the engine so it can be reused in other scripts
 def get_engine():
-    return engine
+    db_url = st.secrets["DATABASE_URL"]
+    return create_engine(db_url)
 
 # Test connection to ensure the app is connected to the database
 def test_connection():
