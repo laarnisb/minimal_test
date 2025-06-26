@@ -47,3 +47,12 @@ def get_transactions_by_user(user_id):
     except SQLAlchemyError as e:
         st.error(f"Error retrieving transactions: {e}")
         return []
+
+def insert_user(name, email, created_at):
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO users (name, email, created_at) VALUES (:name, :email, :created_at)"),
+            {"name": name, "email": email, "created_at": created_at}
+        )
+    
