@@ -55,4 +55,9 @@ def insert_user(name, email, registration_date):
             text("INSERT INTO users (name, email, registration_date) VALUES (:name, :email, :registration_date)"),
             {"name": name, "email": email, "registration_date": registration_date}
         )
-    
+
+def get_all_transactions():
+    engine = get_engine()
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT * FROM transactions ORDER BY transaction_date DESC"))
+        return [dict(row._mapping) for row in result]
