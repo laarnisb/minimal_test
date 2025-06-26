@@ -1,5 +1,3 @@
-# pages/2_Upload_Transactions.py
-
 import streamlit as st
 import pandas as pd
 from database import insert_transactions
