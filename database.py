@@ -1,5 +1,3 @@
-# Force update: ensuring latest version is deployed with get_engine()
-
 from sqlalchemy import create_engine, text
 import streamlit as st
 import pandas as pd
