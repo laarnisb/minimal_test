@@ -27,7 +27,7 @@ def insert_transaction(user_id, name, amount, category):
         with engine.connect() as conn:
             conn.execute(
                 text("""
-                    INSERT INTO transactions (user_id, name, amount, category, created_at)
+                    INSERT INTO transactions (user_id, name, amount, category, registration_date)
                     VALUES (:user_id, :name, :amount, :category, NOW())
                 """),
                 {"user_id": user_id, "name": name, "amount": amount, "category": category}
@@ -40,7 +40,7 @@ def get_transactions_by_user(user_id):
     try:
         with engine.connect() as conn:
             result = conn.execute(
-                text("SELECT * FROM transactions WHERE user_id = :user_id ORDER BY created_at DESC"),
+                text("SELECT * FROM transactions WHERE user_id = :user_id ORDER BY registration_date DESC"),
                 {"user_id": user_id}
             )
             return result.fetchall()
@@ -48,11 +48,11 @@ def get_transactions_by_user(user_id):
         st.error(f"Error retrieving transactions: {e}")
         return []
 
-def insert_user(name, email, created_at):
+def insert_user(name, email, registration_date):
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(
-            text("INSERT INTO users (name, email, created_at) VALUES (:name, :email, :created_at)"),
-            {"name": name, "email": email, "created_at": created_at}
+            text("INSERT INTO users (name, email, registration_date) VALUES (:name, :email, :registration_date)"),
+            {"name": name, "email": email, "registration_date": registration_date}
         )
     
