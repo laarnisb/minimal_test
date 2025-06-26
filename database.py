@@ -1,63 +1,47 @@
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
 import streamlit as st
-import os
+import pandas as pd
 
-# Read secrets from Streamlit config
-DB_USER = st.secrets["DB_USER"]
-DB_PASSWORD = st.secrets["DB_PASSWORD"]
-DB_HOST = st.secrets["DB_HOST"]
-DB_PORT = st.secrets["DB_PORT"]
-DB_NAME = st.secrets["DB_NAME"]
+# Initialize SQLAlchemy engine using Streamlit secrets
+engine = create_engine(st.secrets["DATABASE_URL"])
 
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+# Return the engine so it can be reused in other scripts
+def get_engine():
+    return engine
 
-engine = create_engine(DATABASE_URL)
-
+# Test connection to ensure the app is connected to the database
 def test_connection():
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT now()"))
-            st.success(f"🎉 Connected! Server time: {result.scalar()}")
-    except SQLAlchemyError as e:
-        st.error(f"Connection failed: {e}")
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT NOW()")).scalar()
+    return result
 
-def insert_transaction(user_id, name, amount, category):
-    try:
-        with engine.connect() as conn:
-            conn.execute(
-                text("""
-                    INSERT INTO transactions (user_id, name, amount, category, registration_date)
-                    VALUES (:user_id, :name, :amount, :category, NOW())
-                """),
-                {"user_id": user_id, "name": name, "amount": amount, "category": category}
-            )
-            st.success("✅ Transaction added successfully!")
-    except SQLAlchemyError as e:
-        st.error(f"Error inserting transaction: {e}")
-
-def get_transactions_by_user(user_id):
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT * FROM transactions WHERE user_id = :user_id ORDER BY registration_date DESC"),
-                {"user_id": user_id}
-            )
-            return result.fetchall()
-    except SQLAlchemyError as e:
-        st.error(f"Error retrieving transactions: {e}")
-        return []
-
+# Insert a new user into the users table
 def insert_user(name, email, registration_date):
-    engine = get_engine()
-    with engine.begin() as conn:
+    with engine.connect() as conn:
         conn.execute(
-            text("INSERT INTO users (name, email, registration_date) VALUES (:name, :email, :registration_date)"),
-            {"name": name, "email": email, "registration_date": registration_date}
+            text("INSERT INTO users (name, email, registration_date) VALUES (:name, :email, :date)"),
+            {"name": name, "email": email, "date": registration_date}
         )
 
-def get_all_transactions():
-    engine = get_engine()
+# Insert transaction records from a dataframe into the transactions table
+def insert_transactions(df: pd.DataFrame):
     with engine.connect() as conn:
-        result = conn.execute(text("SELECT * FROM transactions ORDER BY transaction_date DESC"))
-        return [dict(row._mapping) for row in result]
+        for _, row in df.iterrows():
+            conn.execute(
+                text("INSERT INTO transactions (user_email, amount, category, description, created_at) "
+                     "VALUES (:user_email, :amount, :category, :description, :created_at)"),
+                {
+                    "user_email": row["user_email"],
+                    "amount": row["amount"],
+                    "category": row["category"],
+                    "description": row["description"],
+                    "created_at": row["created_at"]
+                }
+            )
+
+# Retrieve all transactions for viewing
+def get_all_transactions():
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT * FROM transactions"))
+        df = pd.DataFrame(result.fetchall(), columns=result.keys())
+    return df
