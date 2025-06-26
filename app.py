@@ -1,13 +1,17 @@
 import streamlit as st
-from database import test_connection
 
-st.set_page_config(page_title="Database Connection Test", page_icon="🔌")
+st.set_page_config(page_title="WiseBudget", page_icon="💰", layout="centered")
 
-st.title("🔌 Database Connection Test")
+st.title("💰 Welcome to WiseBudget")
+st.markdown(
+    """
+    **WiseBudget** helps you track and manage your finances with ease.
 
-if st.button("Test Connection"):
-    try:
-        server_time = test_connection()
-        st.success(f"🎉 Connected! Server time: {server_time}")
-    except Exception as e:
-        st.error(f"❌ Connection failed: {e}")
+    Use the sidebar to:
+    - 📝 Register users
+    - 📊 Upload and analyze your spending data
+    - 📈 View financial insights and trends
+    """
+)
+
+st.info("👉 Select a page from the sidebar to begin.")
