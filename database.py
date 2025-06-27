@@ -24,18 +24,32 @@ def insert_user(name, email, registration_date):
             {"name": name, "email": email, "date": registration_date}
         )
 
-# Insert transaction records from a dataframe into the transactions table
 def insert_transactions(df: pd.DataFrame):
     with engine.connect() as conn:
         for _, row in df.iterrows():
+            # Look up user_id based on user_email
+            result = conn.execute(
+                text("SELECT id FROM users WHERE email = :email"),
+                {"email": row["user_email"]}
+            )
+            user_row = result.fetchone()
+
+            if user_row is None:
+                raise ValueError(f"❌ User with email '{row['user_email']}' not found in users table.")
+
+            user_id = user_row[0]  # Extract UUID
+
+            # Insert transaction with user_id
             conn.execute(
-                text("INSERT INTO transactions (user_email, amount, category, description, date) "
-                     "VALUES (:user_email, :amount, :category, :description, :date)"),
+                text("""
+                    INSERT INTO transactions (user_id, amount, category, name, date)
+                    VALUES (:user_id, :amount, :category, :name, :date)
+                """),
                 {
-                    "user_email": row["user_email"],
+                    "user_id": user_id,
                     "amount": row["amount"],
                     "category": row["category"],
-                    "description": row["description"],
+                    "name": row["description"],  # maps to 'name' column in DB
                     "date": row["date"]
                 }
             )
