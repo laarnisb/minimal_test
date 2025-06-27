@@ -57,3 +57,16 @@ def add_user_email_column_if_missing():
         """))
         if not result.fetchone():
             conn.execute(text("ALTER TABLE transactions ADD COLUMN user_email TEXT"))
+
+# Check and add user_email column to transactions table if not exists
+def add_user_email_column():
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='transactions' AND column_name='user_email'
+        """))
+        column_exists = result.fetchone() is not None
+
+        if not column_exists:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN user_email TEXT"))
