@@ -46,3 +46,14 @@ def get_all_transactions():
         result = conn.execute(text("SELECT * FROM transactions"))
         df = pd.DataFrame(result.fetchall(), columns=result.keys())
     return df
+
+# Add a 'user_email' column to transactions table if it doesn't exist
+def add_user_email_column_if_missing():
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'transactions' AND column_name = 'user_email'
+        """))
+        if not result.fetchone():
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN user_email TEXT"))
