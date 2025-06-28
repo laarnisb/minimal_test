@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 import streamlit as st
 import pandas as pd
 
@@ -18,11 +19,19 @@ def test_connection():
 
 # Insert a new user into the users table
 def insert_user(name, email, registration_date):
-    with engine.begin() as conn:  # engine.begin() auto-commits
-        conn.execute(
-            text("INSERT INTO users (name, email, registration_date) VALUES (:name, :email, :date)"),
-            {"name": name, "email": email, "date": registration_date}
-        )
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text("INSERT INTO users (name, email, registration_date) VALUES (:name, :email, :date)"),
+                {"name": name, "email": email, "date": registration_date}
+            )
+    except IntegrityError as e:
+        if 'unique constraint "users_email_key"' in str(e.orig):
+            raise ValueError(f"⚠️ User with email '{email}' is already registered.")
+        else:
+            raise ValueError(f"❌ Failed to register user: {str(e)}")
+
+
 
 def insert_transactions(df: pd.DataFrame):
     with engine.connect() as conn:
