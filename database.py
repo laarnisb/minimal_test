@@ -18,7 +18,7 @@ def test_connection():
 
 # Insert a new user into the users table
 def insert_user(name, email, registration_date):
-    with engine.connect() as conn:
+    with engine.begin() as conn:  # engine.begin() auto-commits
         conn.execute(
             text("INSERT INTO users (name, email, registration_date) VALUES (:name, :email, :date)"),
             {"name": name, "email": email, "date": registration_date}
