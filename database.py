@@ -39,17 +39,17 @@ def insert_transactions(df: pd.DataFrame):
 
             user_id = user_row[0]  # Extract UUID
 
-            # Insert transaction with user_id
+            # Insert transaction with correct column names
             conn.execute(
                 text("""
-                    INSERT INTO transactions (user_id, amount, category, name, date)
-                    VALUES (:user_id, :amount, :category, :name, :date)
+                    INSERT INTO transactions (user_id, amount, category, description, date)
+                    VALUES (:user_id, :amount, :category, :description, :date)
                 """),
                 {
                     "user_id": user_id,
                     "amount": row["amount"],
                     "category": row["category"],
-                    "name": row["description"],  # maps to 'name' column in DB
+                    "description": row["description"],
                     "date": row["date"]
                 }
             )
