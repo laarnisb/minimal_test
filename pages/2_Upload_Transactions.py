@@ -29,10 +29,10 @@ if uploaded_file is not None:
 
                     if result:
                         user_id = result[0]
-                        insert_query = text(\"""
+                        insert_query = text("""
                             INSERT INTO transactions (user_id, amount, category, description, date)
                             VALUES (:user_id, :amount, :category, :description, :date)
-                        \""")
+                        """)
                         conn.execute(insert_query, {
                             "user_id": user_id,
                             "amount": row["amount"],
@@ -51,11 +51,3 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"❌ Failed to upload transactions: {e}")
-"""
-
-# Save to file
-file_path = "/mnt/data/2_Upload_Transactions.py"
-with open(file_path, "w") as f:
-    f.write(content)
-
-file_path
