@@ -1,63 +1,61 @@
 import streamlit as st
 import pandas as pd
-from database import insert_transactions
+from sqlalchemy import text
+from database import get_engine
 
 st.set_page_config(page_title="Upload Transactions", page_icon="📤")
-
 st.title("📤 Upload Transactions")
 
-uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
+st.write("Upload a CSV file with columns: user_email, amount, category, description, date")
+
+uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
 
 if uploaded_file is not None:
     try:
         df = pd.read_csv(uploaded_file)
 
-        # Show preview of data
-        st.write("### Preview:")
-        st.dataframe(df)
-
-        # Rename 'created_at' to 'date' if necessary
-        if 'created_at' in df.columns and 'date' not in df.columns:
-            df.rename(columns={'created_at': 'date'}, inplace=True)
-
-        # Validate required columns
         required_columns = {"user_email", "amount", "category", "description", "date"}
         if not required_columns.issubset(df.columns):
-            missing = required_columns - set(df.columns)
-            st.error(f"Missing required columns: {', '.join(missing)}")
+            st.error(f"❌ CSV must include columns: {', '.join(required_columns)}")
         else:
-            # Parse 'date' column to datetime
-            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+            engine = get_engine()
+            success_count = 0
 
-            if df["date"].isnull().any():
-                st.warning("Some dates could not be parsed and were set to NaT.")
+            with engine.begin() as conn:
+                for _, row in df.iterrows():
+                    # Lookup user_id by email
+                    user_query = text("SELECT id FROM users WHERE email = :email")
+                    result = conn.execute(user_query, {"email": row["user_email"]}).fetchone()
 
-            if st.button("Submit Transactions"):
-                try:
-                    insert_transactions(df)
-                    st.success("✅ Transactions uploaded successfully!")
-                except Exception as e:
-                    st.error(f"❌ Failed to upload transactions: {e}")
+                    if result:
+                        user_id = result[0]
+                        insert_query = text(\"""
+                            INSERT INTO transactions (user_id, amount, category, description, date)
+                            VALUES (:user_id, :amount, :category, :description, :date)
+                        \""")
+                        conn.execute(insert_query, {
+                            "user_id": user_id,
+                            "amount": row["amount"],
+                            "category": row["category"],
+                            "description": row["description"],
+                            "date": row["date"]
+                        })
+                        success_count += 1
+                    else:
+                        st.warning(f"⚠️ Email not found in users table: {row['user_email']}")
+
+            if success_count:
+                st.success(f"✅ Successfully uploaded {success_count} transaction(s).")
+            else:
+                st.warning("⚠️ No transactions were uploaded. Please check your CSV file and emails.")
 
     except Exception as e:
-        st.error(f"❌ Failed to read the file: {e}")
-else:
-    st.info("Please upload a CSV file to proceed.")
+        st.error(f"❌ Failed to upload transactions: {e}")
+"""
 
-from database import get_engine
-from sqlalchemy import text
+# Save to file
+file_path = "/mnt/data/2_Upload_Transactions.py"
+with open(file_path, "w") as f:
+    f.write(content)
 
-engine = get_engine()
-
-def check_transactions_columns():
-    with engine.connect() as conn:
-        result = conn.execute(text("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name = 'transactions'
-        """))
-        return [row[0] for row in result.fetchall()]
-
-# Debug output
-st.subheader("🧪 Debug: Transactions Table Columns")
-st.write(check_transactions_columns())
+file_path
