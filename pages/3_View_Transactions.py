@@ -24,7 +24,7 @@ if email:
 
                 # Step 2: Fetch transactions based on user_id
                 txn_query = text("""
-                    SELECT amount, category, name, date
+                    SELECT amount, category, description, date
                     FROM transactions
                     WHERE user_id = :user_id
                     ORDER BY date DESC
