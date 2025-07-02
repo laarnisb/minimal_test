@@ -1,71 +1,57 @@
 import streamlit as st
-from database import get_engine
 import pandas as pd
 import plotly.express as px
+from sqlalchemy import text
+from database import get_engine
 
 st.set_page_config(page_title="Budget Insights", page_icon="📊")
 st.title("📊 Budget Insights")
 
-engine = get_engine()
-
-# Prompt for email
 st.write("Enter your registered email to view your categorized spending breakdown.")
+
 email = st.text_input("Email")
 
-# Define category mapping
-category_map = {
-    "groceries": "Needs",
-    "rent": "Needs",
-    "utilities": "Needs",
-    "transport": "Needs",
-    "insurance": "Needs",
-    "healthcare": "Needs",
-    "internet": "Needs",
-    "dining": "Wants",
-    "entertainment": "Wants",
-    "travel": "Wants",
-    "shopping": "Wants",
-    "subscriptions": "Wants",
-    "savings": "Savings",
-    "investment": "Savings",
-    "emergency fund": "Savings",
-    "retirement": "Savings"
-}
+if email:
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            # Step 1: Get user_id
+            user_query = text("SELECT id FROM users WHERE email = :email")
+            user_result = conn.execute(user_query, {"email": email}).fetchone()
 
-def fetch_transactions(user_email):
-    if not user_email:
-        return pd.DataFrame()
-    
-    query = """
-        SELECT t.amount, t.category
-        FROM transactions t
-        JOIN users u ON t.user_id = u.id
-        WHERE u.email = %(email)s
-    """
-    with engine.connect() as conn:
-        df = pd.read_sql(query, conn, params={"email": user_email})
-    return df
+            if user_result:
+                user_id = user_result[0]
 
-try:
-    df = fetch_transactions(email)
+                # Step 2: Get transactions
+                txn_query = text("SELECT category, amount FROM transactions WHERE user_id = :user_id")
+                txn_df = pd.read_sql(txn_query, conn, params={"user_id": user_id})
 
-    if email and df.empty:
-        st.info("No transactions found for the given email.")
-    elif not email:
-        st.warning("Please enter your email to view your insights.")
-    else:
-        # Normalize and map categories
-        df["category_normalized"] = df["category"].str.lower().str.strip()
-        df["broad_category"] = df["category_normalized"].map(category_map).fillna("Other")
+                if not txn_df.empty:
+                    # Step 3: Map categories to budget groups
+                    category_mapping = {
+                        "groceries": "Needs", "rent": "Needs", "utilities": "Needs", "transport": "Needs",
+                        "insurance": "Needs", "healthcare": "Needs", "internet": "Needs",
+                        "dining": "Wants", "entertainment": "Wants", "travel": "Wants", "shopping": "Wants",
+                        "subscriptions": "Wants", "savings": "Savings", "investment": "Savings",
+                        "emergency fund": "Savings", "retirement": "Savings"
+                    }
+                    txn_df["broad_category"] = txn_df["category"].map(category_mapping).fillna("Other")
 
-        # Group by mapped category
-        summary = df.groupby("broad_category")["amount"].sum().reset_index()
+                    # Step 4: Summarize spending by group
+                    summary_df = txn_df.groupby("broad_category")["amount"].sum().reset_index()
+                    summary_df.columns = ["Category Group", "Total Spending"]
 
-        st.subheader("Spending Summary by Needs, Wants, and Savings")
-        st.dataframe(summary)
+                    # Step 5: Show summary table
+                    st.subheader("Spending Summary by Needs, Wants, and Savings")
+                    st.dataframe(summary_df)
 
-        fig = px.pie(summary, names="broad_category", values="amount", title="Spending by Category Group")
-        st.plotly_chart(fig, use_container_width=True)
-
-except Exception as e:
-    st.error(f"❌ Error loading insights: {e}")
+                    # Step 6: Pie chart
+                    fig = px.pie(summary_df, names="Category Group", values="Total Spending",
+                                 title="Spending by Category Group")
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No transactions found for this user.")
+            else:
+                st.warning("No user found with that email.")
+    except Exception as e:
+        st.error(f"Error loading insights: {e}")
