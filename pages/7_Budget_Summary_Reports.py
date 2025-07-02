@@ -3,6 +3,7 @@ import pandas as pd
 from sqlalchemy import text
 from database import get_engine
 import matplotlib.pyplot as plt
+import io
 
 st.set_page_config(page_title="Budget Summary Reports", page_icon="📊")
 st.title("📊 Budget Summary Reports")
@@ -106,3 +107,29 @@ if email:
 
     except Exception as e:
         st.error(f"❌ Error generating budget summary: {e}")
+
+# Add download buttons if there is summary data
+if not summary_df.empty:
+    st.markdown("### 📥 Export Budget Summary")
+
+    # CSV export
+    csv_buffer = io.StringIO()
+    summary_df.to_csv(csv_buffer, index=False)
+    st.download_button(
+        label="Download as CSV",
+        data=csv_buffer.getvalue(),
+        file_name="budget_summary.csv",
+        mime="text/csv"
+    )
+
+    # Excel export
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+        summary_df.to_excel(writer, index=False, sheet_name='Summary')
+        writer.save()
+    st.download_button(
+        label="Download as Excel",
+        data=excel_buffer.getvalue(),
+        file_name="budget_summary.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
