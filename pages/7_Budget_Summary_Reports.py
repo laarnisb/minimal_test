@@ -1,60 +1,108 @@
 import streamlit as st
 import pandas as pd
-from database import get_engine
 from sqlalchemy import text
+from database import get_engine
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Budget Summary Reports", page_icon="📊")
 st.title("📊 Budget Summary Reports")
 
-email = st.text_input("Enter your registered email")
+st.write("Enter your registered email to view a summary of your spending vs. your budget goals.")
+
+email = st.text_input("Email")
 
 if email:
     try:
         engine = get_engine()
         with engine.connect() as conn:
-            # Retrieve user ID
-            result = conn.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email})
-            user = result.fetchone()
+            # Step 1: Get user_id
+            user_result = conn.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()
+            if not user_result:
+                st.warning("⚠️ No user found with that email.")
+            else:
+                user_id = user_result[0]
 
-            if user:
-                user_id = user[0]
-
-                # Fetch budget goals
-                goals = conn.execute(text("""
-                    SELECT income, needs_percent, wants_percent, savings_percent 
-                    FROM budget_goals WHERE user_id = :user_id
-                """), {"user_id": user_id}).fetchone()
-
-                # Fetch actual spending
-                spending = conn.execute(text("""
-                    SELECT category, SUM(amount) AS total_spent 
-                    FROM transactions 
-                    WHERE user_id = :user_id 
-                    GROUP BY category
+                # Step 2: Fetch transactions
+                txn_result = conn.execute(text("""
+                    SELECT category, amount FROM transactions
+                    WHERE user_id = :user_id
                 """), {"user_id": user_id}).fetchall()
 
-                if goals and spending:
-                    income, needs_pct, wants_pct, savings_pct = goals
-                    budget_targets = {
-                        "Needs": income * needs_pct / 100,
-                        "Wants": income * wants_pct / 100,
-                        "Savings": income * savings_pct / 100,
-                    }
+                # Step 3: Fetch budget goals
+                goal_result = conn.execute(text("""
+                    SELECT income, needs_percent, wants_percent, savings_percent
+                    FROM budget_goals
+                    WHERE user_id = :user_id
+                """), {"user_id": user_id}).fetchone()
 
-                    actuals = {row[0]: row[1] for row in spending}
-                    st.subheader("📈 Budget Summary")
+                if not txn_result:
+                    st.info("ℹ️ No transactions found for this user.")
+                elif not goal_result:
+                    st.info("ℹ️ No budget goals set for this user.")
+                else:
+                    # Prepare data
+                    df = pd.DataFrame(txn_result, columns=["Category", "Amount"])
+                    income, needs_pct, wants_pct, savings_pct = goal_result
+                    total_spent = df["Amount"].sum()
 
-                    summary_df = pd.DataFrame({
-                        "Budgeted": budget_targets,
-                        "Actual": [actuals.get(cat, 0) for cat in budget_targets]
+                    # Actual spending
+                    category_totals = df.groupby("Category")["Amount"].sum().reset_index()
+
+                    # Pie Chart of Spending Breakdown
+                    st.subheader("🧾 Spending Breakdown")
+                    fig1, ax1 = plt.subplots()
+                    ax1.pie(category_totals["Amount"], labels=category_totals["Category"], autopct="%1.1f%%", startangle=90)
+                    ax1.axis("equal")
+                    st.pyplot(fig1)
+
+                    # Budgeted amounts
+                    st.subheader("📌 Budget Goals vs Actual Spending")
+                    budget_data = pd.DataFrame({
+                        "Type": ["Needs", "Wants", "Savings"],
+                        "Budgeted Amount": [
+                            income * needs_pct / 100,
+                            income * wants_pct / 100,
+                            income * savings_pct / 100
+                        ]
                     })
 
-                    st.dataframe(summary_df)
+                    # Approximate classification for demo
+                    needs_keywords = ["rent", "groceries", "utilities", "insurance", "health"]
+                    wants_keywords = ["entertainment", "shopping", "dining"]
+                    savings_keywords = ["savings", "investment", "retirement"]
 
-                    st.bar_chart(summary_df)
-                else:
-                    st.info("No data available for this user.")
-            else:
-                st.warning("⚠️ User not found.")
+                    def classify(row):
+                        category = row["Category"].lower()
+                        if any(word in category for word in needs_keywords):
+                            return "Needs"
+                        elif any(word in category for word in wants_keywords):
+                            return "Wants"
+                        elif any(word in category for word in savings_keywords):
+                            return "Savings"
+                        else:
+                            return "Needs"  # default fallback
+
+                    df["Group"] = df.apply(classify, axis=1)
+                    actual_summary = df.groupby("Group")["Amount"].sum().reset_index()
+                    actual_summary.columns = ["Type", "Actual Spending"]
+
+                    summary = pd.merge(budget_data, actual_summary, on="Type", how="left").fillna(0)
+                    st.dataframe(summary)
+
+                    # Bar chart comparison
+                    st.subheader("📉 Budget vs. Actual Comparison")
+                    fig2, ax2 = plt.subplots()
+                    bar_width = 0.35
+                    x = range(len(summary))
+
+                    ax2.bar(x, summary["Budgeted Amount"], width=bar_width, label="Budgeted")
+                    ax2.bar([p + bar_width for p in x], summary["Actual Spending"], width=bar_width, label="Actual")
+                    ax2.set_xticks([p + bar_width / 2 for p in x])
+                    ax2.set_xticklabels(summary["Type"])
+                    ax2.set_ylabel("Amount ($)")
+                    ax2.set_title("Budgeted vs. Actual Spending")
+                    ax2.legend()
+                    st.pyplot(fig2)
+
     except Exception as e:
-        st.error(f"❌ Error: {e}")
+        st.error(f"❌ Error generating budget summary: {e}")
