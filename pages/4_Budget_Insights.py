@@ -1,94 +1,71 @@
 import streamlit as st
+from database import get_engine
 import pandas as pd
-import matplotlib.pyplot as plt
-from sqlalchemy import create_engine
-import os
+import plotly.express as px
 
-# Database connection setup
-DB_USER = st.secrets["DB_USER"]
-DB_PASSWORD = st.secrets["DB_PASSWORD"]
-DB_HOST = st.secrets["DB_HOST"]
-DB_PORT = st.secrets["DB_PORT"]
-DB_NAME = st.secrets["DB_NAME"]
+st.set_page_config(page_title="Budget Insights", page_icon="📊")
+st.title("📊 Budget Insights")
 
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-engine = create_engine(DATABASE_URL)
+engine = get_engine()
 
-# Category mapping: raw category → grouped budget category
-category_mapping = {
-    'Groceries': 'Needs',
-    'Rent': 'Needs',
-    'Utilities': 'Needs',
-    'Healthcare': 'Needs',
-    'Transport': 'Wants',
-    'Dining': 'Wants',
-    'Entertainment': 'Wants',
-    'Shopping': 'Wants',
-    'Other': 'Wants',
-    'Savings': 'Savings'
+# Prompt for email
+st.write("Enter your registered email to view your categorized spending breakdown.")
+email = st.text_input("Email")
+
+# Define category mapping
+category_map = {
+    "groceries": "Needs",
+    "rent": "Needs",
+    "utilities": "Needs",
+    "transport": "Needs",
+    "insurance": "Needs",
+    "healthcare": "Needs",
+    "internet": "Needs",
+    "dining": "Wants",
+    "entertainment": "Wants",
+    "travel": "Wants",
+    "shopping": "Wants",
+    "subscriptions": "Wants",
+    "savings": "Savings",
+    "investment": "Savings",
+    "emergency fund": "Savings",
+    "retirement": "Savings"
 }
 
-# Streamlit page config
-st.set_page_config(page_title="Budget Insights", page_icon="📊")
-
-st.title("📊 Budget Insights")
-st.markdown("Get a breakdown of your actual spending grouped into **Needs**, **Wants**, and **Savings**.")
-
-# Email input
-email = st.text_input("Enter your registered email")
-
-if email:
+def fetch_transactions(user_email):
+    if not user_email:
+        return pd.DataFrame()
+    
+    query = """
+        SELECT t.amount, t.category
+        FROM transactions t
+        JOIN users u ON t.user_id = u.id
+        WHERE u.email = %(email)s
+    """
     with engine.connect() as conn:
-        query = """
-            SELECT t.category, t.amount
-            FROM transactions t
-            JOIN users u ON t.user_id = u.id
-            WHERE u.email = %(email)s
-        """
-        transactions_df = pd.read_sql(query, conn, params={"email": email})
+        df = pd.read_sql(query, conn, params={"email": user_email})
+    return df
 
-    if transactions_df.empty:
-        st.warning("No transactions found for this user.")
+try:
+    df = fetch_transactions(email)
+
+    if email and df.empty:
+        st.info("No transactions found for the given email.")
+    elif not email:
+        st.warning("Please enter your email to view your insights.")
     else:
-        # Map to broader budget categories
-        transactions_df["budget_category"] = transactions_df["category"].map(category_mapping).fillna("Other")
+        # Normalize and map categories
+        df["category_normalized"] = df["category"].str.lower().str.strip()
+        df["broad_category"] = df["category_normalized"].map(category_map).fillna("Other")
 
-        summary = (
-            transactions_df.groupby("budget_category")["amount"]
-            .sum()
-            .reset_index()
-            .rename(columns={"budget_category": "Category", "amount": "Total Amount"})
-        )
+        # Group by mapped category
+        summary = df.groupby("broad_category")["amount"].sum().reset_index()
 
-        st.subheader("🧾 Spending Summary")
+        st.subheader("Spending Summary by Needs, Wants, and Savings")
         st.dataframe(summary)
 
-        # Pie Chart
-        st.subheader("📌 Spending by Category")
-        fig1, ax1 = plt.subplots()
-        ax1.pie(
-            summary["Total Amount"],
-            labels=summary["Category"],
-            autopct="%1.1f%%",
-            startangle=90,
-        )
-        ax1.axis("equal")
-        st.pyplot(fig1)
+        fig = px.pie(summary, names="broad_category", values="amount", title="Spending by Category Group")
+        st.plotly_chart(fig, use_container_width=True)
 
-        # Bar Chart
-        st.subheader("📊 Spending Breakdown")
-        fig2, ax2 = plt.subplots()
-        ax2.bar(summary["Category"], summary["Total Amount"])
-        ax2.set_xlabel("Category")
-        ax2.set_ylabel("Amount ($)")
-        ax2.set_title("Actual Spending by Category")
-        st.pyplot(fig2)
-
-        # Download CSV
-        csv = summary.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 Download Summary as CSV",
-            data=csv,
-            file_name="budget_insights_summary.csv",
-            mime="text/csv"
-        )
+except Exception as e:
+    st.error(f"❌ Error loading insights: {e}")
