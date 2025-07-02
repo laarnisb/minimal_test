@@ -72,7 +72,7 @@ if email:
                     fig, ax = plt.subplots()
                     index = range(len(summary_df))
                     bar_width = 0.35
-                    actuals = summary_df["total"]
+                    actuals = summary_df["Total"]
                     goals = summary_df["Goal Amount"]
                     labels = summary_df["CategoryType"]
 
