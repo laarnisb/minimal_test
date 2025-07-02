@@ -36,7 +36,7 @@ if email:
                         "subscriptions": "Wants",  "savings": "Savings", "investment": "Savings",
                         "emergency fund": "Savings", "retirement": "Savings"
                     }
-                    txn_df["Group"] = txn_df["category"].map(category_mapping).fillna("Other")
+                    txn_df["Group"] = txn_df["category"].str.lower().map(category_mapping).fillna("Other")
 
                     # Step 4: Summarize
                     summary_df = txn_df.groupby("Group")["amount"].sum().reset_index()
