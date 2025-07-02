@@ -49,10 +49,10 @@ if email:
                             "groceries": "Needs", "rent": "Needs", "utilities": "Needs", "transport": "Needs",
                             "insurance": "Needs", "healthcare": "Needs", "internet": "Needs",
                             "dining": "Wants", "entertainment": "Wants", "travel": "Wants", "shopping": "Wants",
-                            "subscriptions": "Wants", "savings": "Savings", "investment": "Savings",
-                            "emergency fund": "Savings", "retirement": "Savings"
+                            "subscriptions": "Wants",
+                            "savings": "Savings", "investment": "Savings", "emergency fund": "Savings", "retirement": "Savings"
                         }
-                        txn_df["group"] = txn_df["category"].map(category_mapping).fillna("Other")
+                        txn_df["group"] = txn_df["category"].str.lower().map(category_mapping).fillna("Other")
 
                         # Step 5: Sum amounts per group
                         actual = txn_df.groupby("group")["amount"].sum().to_dict()
