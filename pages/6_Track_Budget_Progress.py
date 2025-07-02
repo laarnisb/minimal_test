@@ -47,9 +47,9 @@ if email:
                         # Step 4: Map categories to Needs/Wants/Savings
                         category_mapping = {
                             "groceries": "Needs", "rent": "Needs", "utilities": "Needs", "transport": "Needs",
-                            "insurance": "Needs", "healthcare": "Needs", "internet": "Needs"
+                            "insurance": "Needs", "healthcare": "Needs", "internet": "Needs",
                             "dining": "Wants", "entertainment": "Wants", "travel": "Wants", "shopping": "Wants",
-                            "subscriptions": "Wants", "savings": "Savings", "investment": "Savings"
+                            "subscriptions": "Wants", "savings": "Savings", "investment": "Savings",
                             "emergency fund": "Savings", "retirement": "Savings"
                         }
                         txn_df["group"] = txn_df["category"].map(category_mapping).fillna("Other")
