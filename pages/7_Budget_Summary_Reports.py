@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
-from sqlalchemy import text
-from database import get_engine
 import matplotlib.pyplot as plt
 import io
+from sqlalchemy import text
+from database import get_engine
 
 st.set_page_config(page_title="Budget Summary Reports", page_icon="📊")
 st.title("📊 Budget Summary Reports")
@@ -16,120 +16,88 @@ if email:
     try:
         engine = get_engine()
         with engine.connect() as conn:
-            # Step 1: Get user_id
-            user_result = conn.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()
-            if not user_result:
-                st.warning("⚠️ No user found with that email.")
-            else:
-                user_id = user_result[0]
+            # Get user_id
+            result = conn.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()
+            if result:
+                user_id = result[0]
 
-                # Step 2: Fetch transactions
-                txn_result = conn.execute(text("""
-                    SELECT category, amount FROM transactions
-                    WHERE user_id = :user_id
-                """), {"user_id": user_id}).fetchall()
-
-                # Step 3: Fetch budget goals
-                goal_result = conn.execute(text("""
+                # Get budget goals
+                budget_query = text("""
                     SELECT income, needs_percent, wants_percent, savings_percent
                     FROM budget_goals
                     WHERE user_id = :user_id
-                """), {"user_id": user_id}).fetchone()
+                """)
+                budget = conn.execute(budget_query, {"user_id": user_id}).fetchone()
 
-                if not txn_result:
-                    st.info("ℹ️ No transactions found for this user.")
-                elif not goal_result:
-                    st.info("ℹ️ No budget goals set for this user.")
-                else:
-                    # Prepare data
-                    df = pd.DataFrame(txn_result, columns=["Category", "Amount"])
-                    income, needs_pct, wants_pct, savings_pct = goal_result
-                    total_spent = df["Amount"].sum()
+                if budget:
+                    income, needs_pct, wants_pct, savings_pct = budget
 
-                    # Actual spending
-                    category_totals = df.groupby("Category")["Amount"].sum().reset_index()
+                    # Get actual transactions
+                    tx_query = text("""
+                        SELECT category, SUM(amount) as total
+                        FROM transactions
+                        WHERE user_id = :user_id
+                        GROUP BY category
+                    """)
+                    tx_df = pd.read_sql(tx_query, conn, params={"user_id": user_id})
 
-                    # Pie Chart of Spending Breakdown
-                    st.subheader("🧾 Spending Breakdown")
-                    fig1, ax1 = plt.subplots()
-                    ax1.pie(category_totals["Amount"], labels=category_totals["Category"], autopct="%1.1f%%", startangle=90)
-                    ax1.axis("equal")
-                    st.pyplot(fig1)
-
-                    # Budgeted amounts
-                    st.subheader("📌 Budget Goals vs Actual Spending")
-                    budget_data = pd.DataFrame({
-                        "Type": ["Needs", "Wants", "Savings"],
-                        "Budgeted Amount": [
-                            income * needs_pct / 100,
-                            income * wants_pct / 100,
-                            income * savings_pct / 100
-                        ]
-                    })
-
-                    # Approximate classification for demo
-                    needs_keywords = ["rent", "groceries", "utilities", "insurance", "health"]
-                    wants_keywords = ["entertainment", "shopping", "dining"]
-                    savings_keywords = ["savings", "investment", "retirement"]
-
-                    def classify(row):
-                        category = row["Category"].lower()
-                        if any(word in category for word in needs_keywords):
+                    # Categorize actuals into needs/wants/savings
+                    def classify(cat):
+                        cat = cat.lower()
+                        if cat in ["groceries", "utilities", "rent", "mortgage", "insurance"]:
                             return "Needs"
-                        elif any(word in category for word in wants_keywords):
+                        elif cat in ["entertainment", "eating out", "shopping", "travel"]:
                             return "Wants"
-                        elif any(word in category for word in savings_keywords):
+                        elif cat in ["savings", "investments", "emergency fund"]:
                             return "Savings"
                         else:
-                            return "Needs"  # default fallback
+                            return "Other"
 
-                    df["Group"] = df.apply(classify, axis=1)
-                    actual_summary = df.groupby("Group")["Amount"].sum().reset_index()
-                    actual_summary.columns = ["Type", "Actual Spending"]
+                    tx_df["CategoryType"] = tx_df["category"].apply(classify)
+                    summary_df = tx_df.groupby("CategoryType")["total"].sum().reset_index()
 
-                    summary = pd.merge(budget_data, actual_summary, on="Type", how="left").fillna(0)
-                    st.dataframe(summary)
+                    # Append goal values for comparison
+                    summary_df = summary_df[summary_df["CategoryType"].isin(["Needs", "Wants", "Savings"])]
+                    summary_df["Goal Amount"] = summary_df["CategoryType"].map({
+                        "Needs": income * needs_pct / 100,
+                        "Wants": income * wants_pct / 100,
+                        "Savings": income * savings_pct / 100
+                    })
 
-                    # Bar chart comparison
-                    st.subheader("📉 Budget vs. Actual Comparison")
-                    fig2, ax2 = plt.subplots()
+                    st.subheader("📈 Budget Summary")
+                    st.dataframe(summary_df)
+
+                    # Visualization
+                    st.subheader("📊 Comparison Chart")
+                    fig, ax = plt.subplots()
+                    index = range(len(summary_df))
                     bar_width = 0.35
-                    x = range(len(summary))
+                    actuals = summary_df["total"]
+                    goals = summary_df["Goal Amount"]
+                    labels = summary_df["CategoryType"]
 
-                    ax2.bar(x, summary["Budgeted Amount"], width=bar_width, label="Budgeted")
-                    ax2.bar([p + bar_width for p in x], summary["Actual Spending"], width=bar_width, label="Actual")
-                    ax2.set_xticks([p + bar_width / 2 for p in x])
-                    ax2.set_xticklabels(summary["Type"])
-                    ax2.set_ylabel("Amount ($)")
-                    ax2.set_title("Budgeted vs. Actual Spending")
-                    ax2.legend()
-                    st.pyplot(fig2)
+                    ax.bar(index, actuals, bar_width, label="Actual")
+                    ax.bar([i + bar_width for i in index], goals, bar_width, label="Goal")
+                    ax.set_xticks([i + bar_width / 2 for i in index])
+                    ax.set_xticklabels(labels)
+                    ax.set_ylabel("Amount ($)")
+                    ax.set_title("Actual Spending vs. Budget Goals")
+                    ax.legend()
+                    st.pyplot(fig)
 
+                    # Export buttons
+                    def to_excel(df):
+                        output = io.BytesIO()
+                        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                            df.to_excel(writer, index=False, sheet_name='Summary')
+                        return output.getvalue()
+
+                    if not summary_df.empty:
+                        st.download_button("⬇️ Download as CSV", summary_df.to_csv(index=False), "budget_summary.csv", "text/csv")
+                        st.download_button("⬇️ Download as Excel", to_excel(summary_df), "budget_summary.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                else:
+                    st.warning("⚠️ No budget goals found for this user.")
+            else:
+                st.error("❌ Email not found.")
     except Exception as e:
-        st.error(f"❌ Error generating budget summary: {e}")
-
-# Add download buttons if there is summary data
-if not summary_df.empty:
-    st.markdown("### 📥 Export Budget Summary")
-
-    # CSV export
-    csv_buffer = io.StringIO()
-    summary_df.to_csv(csv_buffer, index=False)
-    st.download_button(
-        label="Download as CSV",
-        data=csv_buffer.getvalue(),
-        file_name="budget_summary.csv",
-        mime="text/csv"
-    )
-
-    # Excel export
-    excel_buffer = io.BytesIO()
-    with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-        summary_df.to_excel(writer, index=False, sheet_name='Summary')
-        writer.save()
-    st.download_button(
-        label="Download as Excel",
-        data=excel_buffer.getvalue(),
-        file_name="budget_summary.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        st.error(f"❌ Error generating summary: {e}")
