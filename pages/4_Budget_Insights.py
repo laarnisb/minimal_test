@@ -35,7 +35,12 @@ if email:
                         "subscriptions": "Wants", "savings": "Savings", "investment": "Savings",
                         "emergency fund": "Savings", "retirement": "Savings"
                     }
-                    txn_df["broad_category"] = txn_df["category"].map(category_mapping).fillna("Other")
+                    
+                    # Normalize category names
+                    txn_df["category"] = txn_df["category"].str.strip().str.lower()
+
+                    # Map and assign group
+                    txn_df["Group"] = txn_df["category"].map(category_mapping).fillna("Other")
 
                     # Step 4: Summarize spending by group
                     summary_df = txn_df.groupby("broad_category")["amount"].sum().reset_index()
